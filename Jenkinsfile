@@ -31,38 +31,68 @@ pipeline {
             }
         }
 
-        stage('Test') {
+        stage('Tests') {
+            parallel {
+                stage('Unit tests') {
+                    agent {
+                        docker {
+                            image 'node:18-alpine'
+                            reuseNode true
+                        }
+                    }
+
+                    steps {
+                        sh '''
+                            #test -f build/index.html
+                            npm test
+                        '''
+                    }
+                    post {
+                        always {
+                            junit 'jest-results/junit.xml'
+                        }
+                    }
+                }
+
+                stage('E2E') {
+                    agent {
+                        docker {
+                            image 'mcr.microsoft.com/playwright:v1.39.0-jammy'
+                            reuseNode true
+                        }
+                    }
+
+                    steps {
+                        sh '''
+                            npm install serve
+                            node_modules/.bin/serve -s build &
+                            sleep 10
+                            npx playwright test  --reporter=html
+                        '''
+                    }
+
+                    post {
+                        always {
+                            publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, keepAll: false, reportDir: 'playwright-report', reportFiles: 'index.html', reportName: 'Playwright HTML Report', reportTitles: '', useWrapperFileDirectly: true])
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Deploy') {
             agent {
                 docker {
                     image 'node:18-alpine'
-                    reuseNode true 
+                    reuseNode true
                 }
             }
             steps {
                 sh '''
-                    echo "✅ Checking if build/index.html exists..."
-                    if [ -f build/index.html ]; then
-                        echo "✔ build/index.html found"
-                    else
-                        echo "❌ build/index.html missing" && exit 1
-                    fi
-
-                    echo "🧪 Running unit tests..."
-                    npm test -- --ci --reporters=default --reporters=jest-junit
+                    npm install netlify-cli@20.1.1
+                    node_modules/.bin/netlify --version
                 '''
             }
-        }
-    }
-
-    post {
-        always {
-            junit 'test-results/junit.xml' 
-        }
-        failure {
-            echo "❌ Tests failed! See console output."
-        }
-        success {
-            echo "🎉 All tests passed!"
         }
     }
 }
