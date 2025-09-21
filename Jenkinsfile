@@ -53,4 +53,16 @@ pipeline {
             }
         }
     }
+
+    post {
+        always {
+            junit 'test-results/junit.xml' 
+        }
+        failure {
+            echo "❌ Tests failed! See console output."
+        }
+        success {
+            echo "🎉 All tests passed!"
+        }
+    }
 }
